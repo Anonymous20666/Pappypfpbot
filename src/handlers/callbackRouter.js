@@ -9,6 +9,7 @@ const gp = require('./groupPfpHandler');
 const dl = require('./downloadHandler');
 const wp = require('./wallpaperHandler');
 const ow = require('../owner/ownerHandler');
+const gu = require('./guideHandler');
 const logger = require('../utils/logger');
 
 async function route(ctx, bot) {
@@ -26,7 +27,8 @@ async function route(ctx, bot) {
 
     /* ── Navigation ── */
     if (data === 'main_menu') {
-      return ctx.editMessageText(`*${config.bot.name} - Main Menu*\n\nChoose an option:`, {
+      return ctx.editMessageText(
+        `\u2728 *${config.bot.name} \u2014 Main Menu*\n\n_Select an option below:_`, {
         parse_mode: 'Markdown', reply_markup: K.mainMenu(owner),
       }).catch(() => ctx.reply('Main Menu:', { reply_markup: K.mainMenu(owner) }));
     }
@@ -39,6 +41,9 @@ async function route(ctx, bot) {
       }
       return;
     }
+
+    /* ── Guide ── */
+    if (data === 'guide') return gu.start(ctx);
 
     /* ── Pinterest ── */
     if (data === 'pinterest') return pi.start(ctx);

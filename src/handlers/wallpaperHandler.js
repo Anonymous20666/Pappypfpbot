@@ -17,7 +17,7 @@ async function browseCategory(ctx, category) {
 
   try {
     const query = `${category.replace(/_/g, ' ')} wallpaper 8k ultra HD portrait tall`;
-    const images = await searchImages(query, 0, 10);
+    const images = await searchImages(query, 0, 10, { preferPortrait: true });
 
     await ctx.telegram.deleteMessage(ctx.chat.id, msg.message_id).catch(() => {});
 
@@ -64,7 +64,7 @@ async function loadMore(ctx, category, page) {
 
   try {
     const query = `${category.replace(/_/g, ' ')} wallpaper 8k ultra HD portrait tall`;
-    const images = await searchImages(query, page, 10);
+    const images = await searchImages(query, page, 10, { preferPortrait: true });
 
     if (!images.length) {
       return ctx.reply(`No more ${displayName} wallpapers found.`, {

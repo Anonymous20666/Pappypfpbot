@@ -94,8 +94,20 @@ async function deleteAndRepair(ctx, num) {
 async function doPairCode(ctx, num, bot) {
   const tid = String(ctx.from.id);
   clearState(ctx.from.id);
-  const wait = await ctx.editMessageText(`Connecting \`+${num}\` via pairing code...`, { parse_mode: 'Markdown' })
-    .catch(() => ctx.reply(`Connecting \`+${num}\` via pairing code...`, { parse_mode: 'Markdown' }));
+  const wait = await ctx.editMessageText(
+    `\ud83d\udd17 *Connecting* \`+${num}\` *via pairing code...*\n\n_This may take a few seconds._`,
+    { parse_mode: 'Markdown' }
+  ).catch(() => ctx.reply(`Connecting \`+${num}\` via pairing code...`, { parse_mode: 'Markdown' }));
+
+  let paired = false;
+  const pairTimeout = setTimeout(async () => {
+    if (!paired) {
+      await ctx.reply(
+        `\u26a0\ufe0f *Pairing timed out* for \`+${num}\`\n\nThe connection took too long. Please try again.`,
+        { parse_mode: 'Markdown', reply_markup: K.backMain() }
+      ).catch(() => {});
+    }
+  }, 5 * 60 * 1000);
 
   try {
     await createWhatsAppSession(tid, num, {
@@ -105,18 +117,22 @@ async function doPairCode(ctx, num, bot) {
           await ctx.telegram.deleteMessage(ctx.chat.id, wait.message_id);
         } catch {}
         await ctx.reply(
-          `*${config.bot.name} Pairing Code*\n\`+${num}\`\n\n` +
-          `\`${formatted}\`\n\n` +
-          `*Steps:*\n` +
-          `1. Open WhatsApp on your phone\n` +
-          `2. Settings → Linked Devices\n` +
-          `3. Link a Device → Link with phone number\n` +
-          `4. Enter the code above\n\n` +
-          `_Code expires in 60 seconds_`,
+          `\ud83d\udd10 *${config.bot.name} \u2014 Pairing Code*\n` +
+          `\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n\n` +
+          `\ud83d\udcf1 Account: \`+${num}\`\n\n` +
+          `\ud83d\udd22 Your Code: \`${formatted}\`\n\n` +
+          `\ud83d\udccb *How to pair:*\n` +
+          `1\ufe0f\u20e3 Open WhatsApp on your phone\n` +
+          `2\ufe0f\u20e3 Go to *Settings \u2192 Linked Devices*\n` +
+          `3\ufe0f\u20e3 Tap *Link a Device \u2192 Link with phone number*\n` +
+          `4\ufe0f\u20e3 Enter the code above\n\n` +
+          `\u23f3 _Code expires in 60 seconds_`,
           { parse_mode: 'Markdown' }
         );
       },
       onConnected: async sock => {
+        paired = true;
+        clearTimeout(pairTimeout);
         const info = sock.user;
         await Session.findOneAndUpdate(
           { telegramId: tid, whatsappNumber: num },
@@ -124,25 +140,29 @@ async function doPairCode(ctx, num, bot) {
           { upsert: true }
         );
         await ctx.reply(
-          `*${config.bot.name} - Paired Successfully!*\n\n` +
-          `Number: \`+${num}\`\n` +
-          `Name: ${info?.name || 'Unknown'}\n\n` +
-          `What would you like to do next?`,
+          `\u2705 *${config.bot.name} \u2014 Paired Successfully!*\n` +
+          `\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n\n` +
+          `\ud83d\udcf1 Number: \`+${num}\`\n` +
+          `\ud83d\udc64 Name: ${info?.name || 'Unknown'}\n\n` +
+          `_What would you like to do next?_`,
           { parse_mode: 'Markdown', reply_markup: K.afterPair(num) }
         );
       },
       onDisconnected: async (reconnect, code) => {
-        if (!reconnect) {
-          await ctx.reply(`Session ended - you were logged out from \`+${num}\`.`, {
-            parse_mode: 'Markdown', reply_markup: K.backMain(),
-          });
+        clearTimeout(pairTimeout);
+        if (!reconnect && !paired) {
+          await ctx.reply(
+            `\u274c *Session ended* \u2014 logged out from \`+${num}\`.\n\n_Try pairing again from the main menu._`,
+            { parse_mode: 'Markdown', reply_markup: K.backMain() }
+          ).catch(() => {});
         }
       },
     });
   } catch (e) {
+    clearTimeout(pairTimeout);
     logger.error('Pairing code: ' + e.message);
     try { await ctx.telegram.deleteMessage(ctx.chat.id, wait.message_id); } catch {}
-    await ctx.reply(`Pairing failed: ${e.message}\n\nPlease try again.`, { reply_markup: K.backMain() });
+    await ctx.reply(`\u274c *Pairing failed:* ${e.message}\n\n_Please try again._`, { parse_mode: 'Markdown', reply_markup: K.backMain() });
   }
 }
 

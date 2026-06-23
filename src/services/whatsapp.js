@@ -74,6 +74,7 @@ async function createWhatsAppSession(telegramId, whatsappNumber, { onCode, onQR,
   let pairingCodeSent = false;
   let pairingCodeSentAt = 0;
   let connectionResolved = false;
+  let pairingReconnects = 0;
   const isPairing = !state.creds.registered;
 
   // For code-based pairing, request the code after a short delay (matching working bot pattern).
@@ -136,12 +137,22 @@ async function createWhatsAppSession(telegramId, whatsappNumber, { onCode, onQR,
       const reason = lastDisconnect?.error?.output?.payload?.error;
       logger.info(`WA closed: ${whatsappNumber} (code=${statusCode}, reason=${reason})`);
 
-      // During pairing, many disconnect codes are normal WA behavior — ignore them
+      // During pairing, socket closes are normal — reconnect with saved creds
       if (isPairing && !connectionResolved) {
         if (pairingCodeSent) {
           const timeSinceCode = Date.now() - pairingCodeSentAt;
-          if (timeSinceCode < 3 * 60 * 1000) {
-            logger.info(`Socket closed (${statusCode}) during pairing — normal, ignoring`);
+          if (timeSinceCode < 3 * 60 * 1000 && pairingReconnects < 5) {
+            pairingReconnects++;
+            logger.info(`Socket closed (${statusCode}) during pairing — reconnecting (${pairingReconnects}/5)`);
+            active.delete(key);
+            setTimeout(() => {
+              createWhatsAppSession(telegramId, whatsappNumber, {
+                onConnected, onDisconnected,
+              }).catch(e => {
+                logger.warn(`Pairing reconnect failed: ${e.message}`);
+                if (onDisconnected) onDisconnected(false, statusCode);
+              });
+            }, 2000);
             return;
           }
         }

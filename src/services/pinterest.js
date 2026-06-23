@@ -2,7 +2,7 @@ const axios = require('axios');
 const config = require('../config');
 const logger = require('../utils/logger');
 
-async function searchImages(query, page = 0, count = 20) {
+async function searchImages(query, page = 0, count = 20, { preferPortrait = false } = {}) {
   try {
     const r1 = await axios.get('https://duckduckgo.com/', {
       params: { q: query, iax: 'images', ia: 'images' },
@@ -26,9 +26,9 @@ async function searchImages(query, page = 0, count = 20) {
       timeout: 10000,
     });
 
-    const results = (r2.data?.results || []).slice(0, count);
-    return results
-      .filter(r => r.image && r.width >= 800 && r.height >= 800)
+    const results = (r2.data?.results || []).slice(0, count * 3);
+    let mapped = results
+      .filter(r => r.image && r.width >= 600 && r.height >= 600)
       .map(r => {
         let url = r.image;
         if (url.includes('pinimg.com') && !url.includes('/originals/')) {
@@ -43,6 +43,17 @@ async function searchImages(query, page = 0, count = 20) {
           source: r.source,
         };
       });
+
+    if (preferPortrait && mapped.length > 0) {
+      const portrait = mapped.filter(img => img.h > img.w);
+      if (portrait.length >= 3) {
+        mapped = portrait;
+      } else {
+        mapped.sort((a, b) => (b.h / b.w) - (a.h / a.w));
+      }
+    }
+
+    return mapped.slice(0, count);
   } catch (e) {
     logger.warn('DDG image search failed: ' + e.message);
     return searchFallback(query, page, count);

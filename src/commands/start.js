@@ -16,25 +16,26 @@ async function start(ctx, bot) {
 
   let channelText = '';
   if (tgChannels.length) {
-    channelText += '\n\n*Telegram Channel:*\n' + tgChannels.map(c => c.link).join('\n');
+    channelText += '\n\n\ud83d\udce2 *Our Telegram Channel:*\n' + tgChannels.map(c => c.link).join('\n');
   }
   if (waChannels.length) {
-    channelText += '\n\n*WhatsApp Channel:*\n' + waChannels.map(c => c.link).join('\n');
+    channelText += '\n\n\ud83d\udcf1 *WhatsApp Channel:*\n' + waChannels.map(c => c.link).join('\n');
   }
 
   await ctx.reply(
-    `*Welcome to ${config.bot.name}, ${name}!*\n\n` +
-    `Your all-in-one WhatsApp & Media manager.\n\n` +
-    `*Features:*\n` +
-    `- Upload HD profile pictures with *zero cropping*\n` +
-    `- Search images (up to 20 per page)\n` +
-    `- Auto-rotate profile pics on a schedule\n` +
-    `- Change WhatsApp Group profile pictures\n` +
-    `- Download media from 8+ platforms\n` +
-    `- HD Wallpaper gallery\n` +
-    `- Manage unlimited WhatsApp accounts\n` +
+    `\u2728 *Welcome to ${config.bot.name}, ${name}!* \u2728\n\n` +
+    `Your premium WhatsApp & Media management bot.\n` +
+    `\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n\n` +
+    `\ud83d\uddbc *HD Profile Pictures* \u2014 Zero cropping, full quality\n` +
+    `\ud83d\udd04 *Auto-Rotate PFP* \u2014 Schedule automatic changes\n` +
+    `\ud83d\udc65 *Group PFP Changer* \u2014 Instant or daily scheduled\n` +
+    `\ud83d\udd0d *Image Search* \u2014 HD images, up to 20 per page\n` +
+    `\u2b07\ufe0f *Media Downloader* \u2014 8+ platforms supported\n` +
+    `\ud83c\udf05 *Wallpaper Gallery* \u2014 Curated HD collections\n` +
+    `\ud83d\udcf1 *Multi-Account* \u2014 Manage unlimited WA accounts` +
     `${channelText}\n\n` +
-    `_Choose an option below to get started:_`,
+    `\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n` +
+    `_Tap a button below to get started:_`,
     { parse_mode: 'Markdown', reply_markup: K.mainMenu(owner) }
   );
 }

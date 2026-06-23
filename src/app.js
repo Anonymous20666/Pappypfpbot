@@ -35,12 +35,16 @@ async function launch() {
   bot.start(async ctx => { await upsertUser(ctx); await startCmd(ctx, bot); });
   bot.help(async ctx => {
     await ctx.reply(
-      `*${config.bot.name} Help*\n\n` +
-      `/start - Main menu\n` +
-      `/help - This message\n` +
-      `/download <url> - Download media from any supported platform\n\n` +
-      `Use the inline buttons to navigate.\n` +
-      `Use inline mode: @${ctx.botInfo.username} <query>`,
+      `\ud83d\udcda *${config.bot.name} \u2014 Help*\n` +
+      `\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n\n` +
+      `\ud83d\udccc *Commands:*\n` +
+      `/start \u2014 Open main menu\n` +
+      `/help \u2014 Show this help message\n` +
+      `/download \`<url>\` \u2014 Download media from any platform\n\n` +
+      `\ud83d\udca1 *Tips:*\n` +
+      `\u2022 Use the inline buttons to navigate\n` +
+      `\u2022 Inline mode: @${ctx.botInfo.username} \`<query>\`\n` +
+      `\u2022 Tap \ud83d\udcd6 *User Guide* in the main menu for full details`,
       { parse_mode: 'Markdown' }
     );
   });

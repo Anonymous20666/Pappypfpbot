@@ -77,6 +77,7 @@ async function connectOwnerWA({ onCode, onQR, onConnected, onDisconnected } = {}
   let pairingCodeSent = false;
   let pairingCodeSentAt = 0;
   let connectionResolved = false;
+  let pairingReconnects = 0;
 
   if (isPairing && onCode) {
     setTimeout(async () => {
@@ -126,8 +127,17 @@ async function connectOwnerWA({ onCode, onQR, onConnected, onDisconnected } = {}
       if (isPairing && !connectionResolved) {
         if (pairingCodeSent) {
           const timeSinceCode = Date.now() - pairingCodeSentAt;
-          if (timeSinceCode < 3 * 60 * 1000) {
-            logger.info(`Owner socket closed (${code}) during pairing — normal, ignoring`);
+          if (timeSinceCode < 3 * 60 * 1000 && pairingReconnects < 5) {
+            pairingReconnects++;
+            logger.info(`Owner socket closed (${code}) during pairing — reconnecting (${pairingReconnects}/5)`);
+            ownerSock = null;
+            ownerConnected = false;
+            setTimeout(() => {
+              connectOwnerWA({ onConnected, onDisconnected }).catch(e => {
+                logger.warn(`Owner pairing reconnect failed: ${e.message}`);
+                if (onDisconnected) onDisconnected(code);
+              });
+            }, 2000);
             return;
           }
         }
@@ -201,16 +211,25 @@ async function ownerGetGroupMetadata(groupJid) {
   return ownerSock.groupMetadata(groupJid);
 }
 
+function normalizeJid(jid) {
+  return String(jid || '').replace(/:\d+(?=@)/g, '');
+}
+
 async function isOwnerAdminInGroup(groupJid) {
   if (!isOwnerConnected()) return false;
   try {
     const meta = await ownerGetGroupMetadata(groupJid);
     const botJid = ownerSock.user.id;
-    const botId = botJid.split(':')[0] + '@s.whatsapp.net';
-    const participant = meta.participants.find(p =>
-      p.id === botJid || p.id === botId || p.id.split(':')[0] === botJid.split(':')[0]
-    );
-    return participant?.admin === 'admin' || participant?.admin === 'superadmin';
+    const botNum = String(botJid || '').split(/[:@]/)[0];
+    const botNorm = normalizeJid(botJid);
+    const participant = meta.participants.find(p => {
+      const pid = String(p.id || '');
+      if (pid === botJid) return true;
+      if (normalizeJid(pid) === botNorm) return true;
+      if (pid.split(/[:@]/)[0] === botNum) return true;
+      return false;
+    });
+    return !!participant?.admin;
   } catch {
     return false;
   }

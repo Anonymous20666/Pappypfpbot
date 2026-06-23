@@ -41,43 +41,76 @@ async function startGroupJoin(task, bot) {
   }
 
   try {
-    const groupJid = await ownerJoinGroup(task.groupInviteCode);
-    task.groupJid = groupJid;
-    task.status = 'pending_admin';
-    task.joinedAt = new Date();
-    task.approvedAt = new Date();
-    await task.save();
+    let groupJid;
+    try {
+      groupJid = await ownerJoinGroup(task.groupInviteCode);
+    } catch (joinErr) {
+      const msg = String(joinErr?.message || '').toLowerCase();
+      if (msg.includes('already') || msg.includes('already-participant') || msg.includes('conflict')) {
+        const { getOwnerSock } = require('./ownerWhatsapp');
+        const sock = getOwnerSock();
+        if (sock) {
+          const info = await sock.groupGetInviteInfo(task.groupInviteCode).catch(() => null);
+          if (info?.id) {
+            groupJid = info.id;
+          } else {
+            throw new Error('Already in group but could not resolve group JID');
+          }
+        } else {
+          throw joinErr;
+        }
+      } else if (joinErr.message?.includes('invite') || joinErr.message?.includes('not-authorized') || joinErr.message?.includes('approval') || joinErr.message?.includes('406')) {
+        task.status = 'pending_approval';
+        await task.save();
 
-    await bot.telegram.sendMessage(
-      task.telegramId,
-      `${config.bot.name} Assistant has joined the group!\n` +
-      `Task: \`${task.taskId}\`\n\n` +
-      `Please promote the ${config.bot.name} Assistant to *admin* so it can change the group profile picture.`,
-      { parse_mode: 'Markdown' }
-    ).catch(() => {});
+        await bot.telegram.sendMessage(
+          task.telegramId,
+          `A join request has been sent to the group.\n` +
+          `Task: \`${task.taskId}\`\n\n` +
+          `Please approve the join request from:\n` +
+          `Name: *${config.bot.name} Assistant*\n` +
+          `Number: \`+${config.ownerWaNumber}\`\n\n` +
+          `Make the account *admin* after approval.`,
+          { parse_mode: 'Markdown' }
+        ).catch(() => {});
 
-    startAdminCheck(task, bot);
-    return task;
-  } catch (e) {
-    if (e.message?.includes('invite') || e.message?.includes('not-authorized')) {
-      task.status = 'pending_approval';
-      await task.save();
-
-      await bot.telegram.sendMessage(
-        task.telegramId,
-        `A join request has been sent to the group.\n` +
-        `Task: \`${task.taskId}\`\n\n` +
-        `Please approve the join request from:\n` +
-        `Name: *${config.bot.name} Assistant*\n` +
-        `Number: \`+${config.ownerWaNumber}\`\n\n` +
-        `Make the account *admin* after approval.`,
-        { parse_mode: 'Markdown' }
-      ).catch(() => {});
-
-      startApprovalCheck(task, bot);
-      return task;
+        startApprovalCheck(task, bot);
+        return task;
+      } else {
+        throw joinErr;
+      }
     }
 
+    task.groupJid = groupJid;
+    task.joinedAt = new Date();
+    task.approvedAt = new Date();
+
+    const isAdmin = await isOwnerAdminInGroup(groupJid).catch(() => false);
+    if (isAdmin) {
+      task.status = 'active';
+      task.adminAt = new Date();
+      await task.save();
+      await bot.telegram.sendMessage(
+        task.telegramId,
+        `${config.bot.name} Assistant is already admin in this group!\nTask \`${task.taskId}\` is active. Changing group PFP...`,
+        { parse_mode: 'Markdown' }
+      ).catch(() => {});
+      await executeGroupPfpChange(task, bot);
+    } else {
+      task.status = 'pending_admin';
+      await task.save();
+      await bot.telegram.sendMessage(
+        task.telegramId,
+        `${config.bot.name} Assistant has joined the group!\n` +
+        `Task: \`${task.taskId}\`\n\n` +
+        `Please promote the ${config.bot.name} Assistant to *admin* so it can change the group profile picture.`,
+        { parse_mode: 'Markdown' }
+      ).catch(() => {});
+      startAdminCheck(task, bot);
+    }
+
+    return task;
+  } catch (e) {
     task.status = 'failed';
     task.errorMsg = e.message;
     await task.save();

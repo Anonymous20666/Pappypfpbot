@@ -147,7 +147,7 @@ async function handleUrl(ctx, url, bot) {
     await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null,
       `Download error: ${e.message}`,
       { reply_markup: K.back('download') }
-    ).catch(() => {});
+    ).catch(() => ctx.reply(`Download error: ${e.message}`, { reply_markup: K.back('download') }).catch(() => {}));
   }
 }
 

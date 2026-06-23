@@ -115,7 +115,8 @@ async function route(ctx, bot) {
     if (data.startsWith('close_ticket:') && owner) return su.closeDo(ctx, data.slice(13));
 
     /* ── Owner panel ── */
-    if (!owner && data.startsWith('o'))
+    const isOwnerRoute = data.startsWith('o') || data.startsWith('fj_') || data.startsWith('ch_');
+    if (!owner && isOwnerRoute)
       return ctx.answerCbQuery('Owner only.', { show_alert: true }).catch(() => {});
 
     if (data === 'owner') return ow.panel(ctx);

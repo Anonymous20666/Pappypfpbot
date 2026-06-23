@@ -46,20 +46,62 @@ async function startGroupJoin(task, bot) {
       groupJid = await ownerJoinGroup(task.groupInviteCode);
     } catch (joinErr) {
       const msg = String(joinErr?.message || '').toLowerCase();
-      if (msg.includes('already') || msg.includes('already-participant') || msg.includes('conflict')) {
+      const code = joinErr?.output?.statusCode;
+      const isAlreadyIn = msg.includes('already') || msg.includes('conflict')
+        || msg.includes('participant') || msg.includes('409') || code === 409;
+      const needsApproval = msg.includes('invite') || msg.includes('not-authorized')
+        || msg.includes('approval') || msg.includes('406') || code === 406;
+
+      if (isAlreadyIn) {
         const { getOwnerSock } = require('./ownerWhatsapp');
         const sock = getOwnerSock();
         if (sock) {
+          // Try multiple methods to resolve the group JID
+          let resolved = false;
+
+          // Method 1: groupGetInviteInfo
           const info = await sock.groupGetInviteInfo(task.groupInviteCode).catch(() => null);
           if (info?.id) {
             groupJid = info.id;
-          } else {
-            throw new Error('Already in group but could not resolve group JID');
+            resolved = true;
+          }
+
+          // Method 2: search all groups for matching invite code
+          if (!resolved) {
+            try {
+              const groups = await sock.groupFetchAllParticipating();
+              for (const [jid, meta] of Object.entries(groups)) {
+                if (meta.inviteCode === task.groupInviteCode || meta.code === task.groupInviteCode) {
+                  groupJid = jid;
+                  resolved = true;
+                  break;
+                }
+              }
+            } catch {}
+          }
+
+          // Method 3: try to get invite info from the link URL
+          if (!resolved) {
+            try {
+              const inviteInfo = await sock.query({
+                tag: 'iq',
+                attrs: { type: 'get', xmlns: 'w:g2', to: '@g.us' },
+                content: [{ tag: 'invite', attrs: { code: task.groupInviteCode } }],
+              }).catch(() => null);
+              if (inviteInfo?.attrs?.from) {
+                groupJid = inviteInfo.attrs.from;
+                resolved = true;
+              }
+            } catch {}
+          }
+
+          if (!resolved) {
+            throw new Error('Already in group but could not resolve group JID. Try sending the group link again.');
           }
         } else {
           throw joinErr;
         }
-      } else if (joinErr.message?.includes('invite') || joinErr.message?.includes('not-authorized') || joinErr.message?.includes('approval') || joinErr.message?.includes('406')) {
+      } else if (needsApproval) {
         task.status = 'pending_approval';
         await task.save();
 

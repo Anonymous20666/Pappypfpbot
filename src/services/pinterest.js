@@ -2,7 +2,7 @@ const axios = require('axios');
 const config = require('../config');
 const logger = require('../utils/logger');
 
-async function searchImages(query, page = 0, count = 20) {
+async function searchImages(query, page = 0, count = 20, { preferPortrait = false } = {}) {
   try {
     const r1 = await axios.get('https://duckduckgo.com/', {
       params: { q: query, iax: 'images', ia: 'images' },
@@ -13,10 +13,12 @@ async function searchImages(query, page = 0, count = 20) {
     if (!match) throw new Error('No vqd token');
     const vqd = match[1];
 
+    // size:Wallpaper filters for large images; Tall for portrait orientation
+    const sizeFilter = preferPortrait ? ',,,Tall,,Wallpaper' : ',,,,,Wallpaper';
     const r2 = await axios.get('https://duckduckgo.com/i.js', {
       params: {
         l: 'us-en', o: 'json', q: query, vqd,
-        f: ',,,,,', p: '1',
+        f: sizeFilter, p: '1',
         s: page * count,
       },
       headers: {
@@ -26,8 +28,8 @@ async function searchImages(query, page = 0, count = 20) {
       timeout: 10000,
     });
 
-    const results = (r2.data?.results || []).slice(0, count);
-    return results
+    const results = (r2.data?.results || []).slice(0, count * 2);
+    let mapped = results
       .filter(r => r.image && r.width >= 800 && r.height >= 800)
       .map(r => {
         let url = r.image;
@@ -43,6 +45,15 @@ async function searchImages(query, page = 0, count = 20) {
           source: r.source,
         };
       });
+
+    if (preferPortrait) {
+      const portrait = mapped.filter(img => img.h >= img.w);
+      if (portrait.length >= Math.min(count, 3)) {
+        mapped = portrait;
+      }
+    }
+
+    return mapped.slice(0, count);
   } catch (e) {
     logger.warn('DDG image search failed: ' + e.message);
     return searchFallback(query, page, count);

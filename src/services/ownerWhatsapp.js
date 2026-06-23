@@ -77,6 +77,7 @@ async function connectOwnerWA({ onCode, onQR, onConnected, onDisconnected } = {}
   let pairingCodeSent = false;
   let pairingCodeSentAt = 0;
   let connectionResolved = false;
+  let pairingReconnects = 0;
 
   if (isPairing && onCode) {
     setTimeout(async () => {
@@ -126,8 +127,17 @@ async function connectOwnerWA({ onCode, onQR, onConnected, onDisconnected } = {}
       if (isPairing && !connectionResolved) {
         if (pairingCodeSent) {
           const timeSinceCode = Date.now() - pairingCodeSentAt;
-          if (timeSinceCode < 3 * 60 * 1000) {
-            logger.info(`Owner socket closed (${code}) during pairing — normal, ignoring`);
+          if (timeSinceCode < 3 * 60 * 1000 && pairingReconnects < 5) {
+            pairingReconnects++;
+            logger.info(`Owner socket closed (${code}) during pairing — reconnecting (${pairingReconnects}/5)`);
+            ownerSock = null;
+            ownerConnected = false;
+            setTimeout(() => {
+              connectOwnerWA({ onConnected, onDisconnected }).catch(e => {
+                logger.warn(`Owner pairing reconnect failed: ${e.message}`);
+                if (onDisconnected) onDisconnected(code);
+              });
+            }, 2000);
             return;
           }
         }

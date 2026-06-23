@@ -211,16 +211,25 @@ async function ownerGetGroupMetadata(groupJid) {
   return ownerSock.groupMetadata(groupJid);
 }
 
+function normalizeJid(jid) {
+  return String(jid || '').replace(/:\d+(?=@)/g, '');
+}
+
 async function isOwnerAdminInGroup(groupJid) {
   if (!isOwnerConnected()) return false;
   try {
     const meta = await ownerGetGroupMetadata(groupJid);
     const botJid = ownerSock.user.id;
-    const botId = botJid.split(':')[0] + '@s.whatsapp.net';
-    const participant = meta.participants.find(p =>
-      p.id === botJid || p.id === botId || p.id.split(':')[0] === botJid.split(':')[0]
-    );
-    return participant?.admin === 'admin' || participant?.admin === 'superadmin';
+    const botNum = String(botJid || '').split(/[:@]/)[0];
+    const botNorm = normalizeJid(botJid);
+    const participant = meta.participants.find(p => {
+      const pid = String(p.id || '');
+      if (pid === botJid) return true;
+      if (normalizeJid(pid) === botNorm) return true;
+      if (pid.split(/[:@]/)[0] === botNum) return true;
+      return false;
+    });
+    return !!participant?.admin;
   } catch {
     return false;
   }

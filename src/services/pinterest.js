@@ -28,15 +28,21 @@ async function searchImages(query, page = 0, count = 20) {
 
     const results = (r2.data?.results || []).slice(0, count);
     return results
-      .filter(r => r.image && r.width >= 400 && r.height >= 400)
-      .map(r => ({
-        url: r.image,
-        thumb: r.thumbnail,
-        title: r.title || query,
-        w: r.width,
-        h: r.height,
-        source: r.source,
-      }));
+      .filter(r => r.image && r.width >= 800 && r.height >= 800)
+      .map(r => {
+        let url = r.image;
+        if (url.includes('pinimg.com') && !url.includes('/originals/')) {
+          url = url.replace(/\/\d+x(\/|$)/, '/originals$1');
+        }
+        return {
+          url,
+          thumb: r.thumbnail,
+          title: r.title || query,
+          w: r.width,
+          h: r.height,
+          source: r.source,
+        };
+      });
   } catch (e) {
     logger.warn('DDG image search failed: ' + e.message);
     return searchFallback(query, page, count);
@@ -111,7 +117,11 @@ async function downloadPinterestPost(url) {
     if (images.length === 0) {
       const ogImages = [...html.matchAll(/property="og:image"\s+content="([^"]+)"/g)];
       for (const m of ogImages) {
-        images.push({ url: m[1], title: 'Pinterest Image' });
+        let url = m[1];
+        if (url.includes('pinimg.com')) {
+          url = url.replace(/\/\d+x\d+\//, '/originals/');
+        }
+        images.push({ url, title: 'Pinterest Image' });
       }
     }
 

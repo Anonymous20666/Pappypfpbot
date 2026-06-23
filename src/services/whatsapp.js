@@ -136,20 +136,19 @@ async function createWhatsAppSession(telegramId, whatsappNumber, { onCode, onQR,
       const reason = lastDisconnect?.error?.output?.payload?.error;
       logger.info(`WA closed: ${whatsappNumber} (code=${statusCode}, reason=${reason})`);
 
-      // During pairing, loggedOut before code is entered is normal WA behavior - ignore it
-      if (isPairing && pairingCodeSent) {
-        const timeSinceCode = Date.now() - pairingCodeSentAt;
-        const keepAlive = 3 * 60 * 1000;
-        if (timeSinceCode < keepAlive && (statusCode === DisconnectReason.loggedOut || statusCode === 428)) {
-          logger.info(`Socket closed (${statusCode}) during pairing — normal, ignoring`);
+      // During pairing, many disconnect codes are normal WA behavior — ignore them
+      if (isPairing && !connectionResolved) {
+        if (pairingCodeSent) {
+          const timeSinceCode = Date.now() - pairingCodeSentAt;
+          if (timeSinceCode < 3 * 60 * 1000) {
+            logger.info(`Socket closed (${statusCode}) during pairing — normal, ignoring`);
+            return;
+          }
+        }
+        if (!pairingRequested && (statusCode === 401 || statusCode === DisconnectReason.badSession || statusCode === 515 || !statusCode)) {
+          logger.info(`Expected ${statusCode} during pairing for ${whatsappNumber}, waiting...`);
           return;
         }
-      }
-
-      // Skip close during expected 401 when pairing code hasn't been requested yet
-      if (isPairing && !pairingRequested && (statusCode === 401 || statusCode === DisconnectReason.badSession)) {
-        logger.info(`Expected ${statusCode} during pairing for ${whatsappNumber}, waiting...`);
-        return;
       }
 
       connectionResolved = true;

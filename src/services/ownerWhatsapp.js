@@ -123,17 +123,18 @@ async function connectOwnerWA({ onCode, onQR, onConnected, onDisconnected } = {}
       const code = lastDisconnect?.error?.output?.statusCode;
       logger.info(`Owner WA closed (code=${code})`);
 
-      if (isPairing && pairingCodeSent) {
-        const timeSinceCode = Date.now() - pairingCodeSentAt;
-        if (timeSinceCode < 3 * 60 * 1000 && (code === DisconnectReason.loggedOut || code === 428)) {
-          logger.info(`Owner socket closed (${code}) during pairing — normal, ignoring`);
+      if (isPairing && !connectionResolved) {
+        if (pairingCodeSent) {
+          const timeSinceCode = Date.now() - pairingCodeSentAt;
+          if (timeSinceCode < 3 * 60 * 1000) {
+            logger.info(`Owner socket closed (${code}) during pairing — normal, ignoring`);
+            return;
+          }
+        }
+        if (!pairingRequested && (code === 401 || code === DisconnectReason.badSession || code === 515 || !code)) {
+          logger.info(`Expected ${code} during owner pairing, waiting...`);
           return;
         }
-      }
-
-      if (isPairing && !pairingRequested && (code === 401 || code === DisconnectReason.badSession)) {
-        logger.info('Expected 401 during owner pairing, waiting...');
-        return;
       }
 
       connectionResolved = true;

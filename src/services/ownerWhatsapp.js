@@ -76,10 +76,11 @@ async function connectOwnerWA({ onCode, onQR, onConnected, onDisconnected } = {}
   let pairingRequested = false;
   let pairingCodeSent = false;
   let pairingCodeSentAt = 0;
+  let connectionResolved = false;
 
   if (isPairing && onCode) {
     setTimeout(async () => {
-      if (pairingRequested || ownerConnected) return;
+      if (pairingRequested || connectionResolved) return;
       const cleanNumber = config.ownerWaNumber.replace(/\D/g, '');
       let code;
       let lastErr;
@@ -101,7 +102,7 @@ async function connectOwnerWA({ onCode, onQR, onConnected, onDisconnected } = {}
         pairingCodeSent = true;
         pairingCodeSentAt = Date.now();
         logger.info(`Owner pairing code generated: ${code}`);
-        await onCode(code);
+        try { await onCode(code); } catch (e) { logger.warn(`onCode callback failed: ${e.message}`); }
       } else {
         logger.warn('All owner pairing code attempts failed');
       }
@@ -113,6 +114,7 @@ async function connectOwnerWA({ onCode, onQR, onConnected, onDisconnected } = {}
       await onQR(qr);
     }
     if (connection === 'open') {
+      connectionResolved = true;
       ownerConnected = true;
       logger.info(`Owner WA connected: ${config.ownerWaNumber}`);
       if (onConnected) onConnected(sock);
@@ -134,6 +136,7 @@ async function connectOwnerWA({ onCode, onQR, onConnected, onDisconnected } = {}
         return;
       }
 
+      connectionResolved = true;
       ownerConnected = false;
       ownerSock = null;
 

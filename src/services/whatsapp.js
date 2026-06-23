@@ -102,7 +102,7 @@ async function createWhatsAppSession(telegramId, whatsappNumber, { onCode, onQR,
         pairingCodeSent = true;
         pairingCodeSentAt = Date.now();
         logger.info(`Pairing code generated for ${whatsappNumber}: ${code}`);
-        await onCode(code);
+        try { await onCode(code); } catch (e) { logger.warn(`onCode callback failed: ${e.message}`); }
       } else {
         logger.warn(`All pairing code attempts failed for ${whatsappNumber}`);
       }

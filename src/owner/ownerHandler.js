@@ -110,7 +110,7 @@ async function fjAddPrompt(ctx) {
 async function fjAddDo(ctx) {
   clearState(ctx.from.id);
   const link = ctx.message.text?.trim();
-  if (!link.startsWith('http') && !link.startsWith('@'))
+  if (!link || (!link.startsWith('http') && !link.startsWith('@')))
     return ctx.reply('Invalid. Send a t.me link or @username.');
   await ForceJoin.create({ link, title: link, isRequired: true, platform: 'telegram' });
   await ctx.reply('Link added.', { reply_markup: K.back('o_fj') });
@@ -164,7 +164,7 @@ async function channelAddDo(ctx) {
   const { platform } = ctx.userState;
   clearState(ctx.from.id);
   const link = ctx.message.text?.trim();
-  if (!link.startsWith('http') && !link.startsWith('@')) {
+  if (!link || (!link.startsWith('http') && !link.startsWith('@'))) {
     return ctx.reply('Invalid. Send a valid link.');
   }
   await Channel.create({ platform, link, title: link });

@@ -37,8 +37,8 @@ function escapeMarkdown(text) {
 }
 
 function calcImageCount(mode, interval) {
-  if (mode === 'hour') return Math.ceil(24 / interval);
-  return Math.ceil(30 / interval);
+  if (mode === 'hour') return Math.min(Math.ceil(24 / interval), 24);
+  return Math.min(Math.ceil(7 / interval), 7);
 }
 
 function extractGroupId(link) {

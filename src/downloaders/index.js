@@ -52,50 +52,55 @@ async function downloadPinterest(url) {
   };
 }
 
-async function downloadWithAPI(url, platform) {
+async function downloadWithAPI(url, platform, retries = 2) {
   const apiEndpoints = [
     { url: 'https://api.cobalt.tools/api/json', type: 'cobalt' },
     { url: 'https://co.wuk.sh/api/json', type: 'cobalt' },
   ];
 
   for (const api of apiEndpoints) {
-    try {
-      const response = await axios.post(api.url, {
-        url,
-        vCodec: 'h264',
-        vQuality: 'max',
-        aFormat: 'mp3',
-        filenamePattern: 'basic',
-        isAudioOnly: false,
-      }, {
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-        },
-        timeout: 30000,
-      });
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        if (attempt > 0) await new Promise(r => setTimeout(r, 2000 * attempt));
+        const response = await axios.post(api.url, {
+          url,
+          vCodec: 'h264',
+          vQuality: 'max',
+          aFormat: 'mp3',
+          filenamePattern: 'basic',
+          isAudioOnly: false,
+        }, {
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+          timeout: 30000,
+        });
 
-      if (response.data?.url) {
-        return {
-          platform,
-          type: 'video',
-          media: [{ url: response.data.url, type: 'video', title: `${platform} Video` }],
-        };
-      }
+        if (response.data?.url) {
+          return {
+            platform,
+            type: 'video',
+            media: [{ url: response.data.url, type: 'video', title: `${platform} Video` }],
+          };
+        }
 
-      if (response.data?.picker) {
-        return {
-          platform,
-          type: 'mixed',
-          media: response.data.picker.map(item => ({
-            url: item.url,
-            type: item.type === 'photo' ? 'photo' : 'video',
-            title: `${platform} Media`,
-          })),
-        };
+        if (response.data?.picker) {
+          return {
+            platform,
+            type: 'mixed',
+            media: response.data.picker.map(item => ({
+              url: item.url,
+              type: item.type === 'photo' ? 'photo' : 'video',
+              title: `${platform} Media`,
+            })),
+          };
+        }
+        break;
+      } catch (e) {
+        logger.warn(`API ${api.url} attempt ${attempt + 1}: ${e.message}`);
+        if (attempt === retries) break;
       }
-    } catch (e) {
-      logger.warn(`API ${api.url} failed: ${e.message}`);
     }
   }
 

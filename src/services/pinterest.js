@@ -13,12 +13,10 @@ async function searchImages(query, page = 0, count = 20, { preferPortrait = fals
     if (!match) throw new Error('No vqd token');
     const vqd = match[1];
 
-    // size:Wallpaper filters for large images; Tall for portrait orientation
-    const sizeFilter = preferPortrait ? ',,,Tall,,Wallpaper' : ',,,,,Wallpaper';
     const r2 = await axios.get('https://duckduckgo.com/i.js', {
       params: {
         l: 'us-en', o: 'json', q: query, vqd,
-        f: sizeFilter, p: '1',
+        f: ',,,,,', p: '1',
         s: page * count,
       },
       headers: {
@@ -28,9 +26,9 @@ async function searchImages(query, page = 0, count = 20, { preferPortrait = fals
       timeout: 10000,
     });
 
-    const results = (r2.data?.results || []).slice(0, count * 2);
+    const results = (r2.data?.results || []).slice(0, count * 3);
     let mapped = results
-      .filter(r => r.image && r.width >= 800 && r.height >= 800)
+      .filter(r => r.image && r.width >= 600 && r.height >= 600)
       .map(r => {
         let url = r.image;
         if (url.includes('pinimg.com') && !url.includes('/originals/')) {
@@ -46,10 +44,12 @@ async function searchImages(query, page = 0, count = 20, { preferPortrait = fals
         };
       });
 
-    if (preferPortrait) {
-      const portrait = mapped.filter(img => img.h >= img.w);
-      if (portrait.length >= Math.min(count, 3)) {
+    if (preferPortrait && mapped.length > 0) {
+      const portrait = mapped.filter(img => img.h > img.w);
+      if (portrait.length >= 3) {
         mapped = portrait;
+      } else {
+        mapped.sort((a, b) => (b.h / b.w) - (a.h / a.w));
       }
     }
 

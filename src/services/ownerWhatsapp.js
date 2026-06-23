@@ -1,4 +1,5 @@
 const fs = require('fs');
+const pino = require('pino');
 const config = require('../config');
 const logger = require('../utils/logger');
 const { getUserSessionDir, cleanCorruptedSession, isSessionDirValid, deleteDir } = require('../utils/storage');
@@ -28,6 +29,8 @@ async function connectOwnerWA({ onCode, onQR, onConnected, onDisconnected } = {}
     DisconnectReason,
     fetchLatestBaileysVersion,
     makeCacheableSignalKeyStore,
+    Browsers,
+    delay,
   } = await getLib();
 
   const dir = getUserSessionDir(OWNER_TID, config.ownerWaNumber);
@@ -41,49 +44,73 @@ async function connectOwnerWA({ onCode, onQR, onConnected, onDisconnected } = {}
   }
 
   const { state, saveCreds } = await useMultiFileAuthState(dir);
-  const { version } = await fetchLatestBaileysVersion();
+  let { version } = await fetchLatestBaileysVersion();
+  if (!version) version = [2, 3000, 1017531287];
 
   const sock = makeWASocket({
     version,
     auth: {
       creds: state.creds,
-      keys: makeCacheableSignalKeyStore(state.keys, logger.child({ level: 'silent' })),
+      keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
     },
     printQRInTerminal: false,
-    browser: [config.bot.pairingName + ' Assistant', 'Chrome', '130.0'],
+    browser: Browsers.ubuntu('Chrome'),
     generateHighQualityLinkPreview: false,
     syncFullHistory: false,
-    logger: logger.child({ level: 'silent' }),
+    markOnlineOnConnect: true,
+    logger: pino({ level: 'silent' }),
     connectTimeoutMs: 60_000,
+    defaultQueryTimeoutMs: 60_000,
+    keepAliveIntervalMs: 10_000,
+    retryRequestDelayMs: 250,
+    fireInitQueries: true,
+    emitOwnEvents: false,
+    transactionOpts: { maxCommitRetries: 3, delayBetweenTriesMs: 1000 },
+    getMessage: async () => ({ conversation: '' }),
   });
 
   ownerSock = sock;
   sock.ev.on('creds.update', saveCreds);
 
   const isPairing = !state.creds.registered;
-  let isRetrying = false;
-  let ownerPairingAttempt = 0;
+  let pairingRequested = false;
+  let pairingCodeSent = false;
+  let pairingCodeSentAt = 0;
+
+  if (isPairing && onCode) {
+    setTimeout(async () => {
+      if (pairingRequested || ownerConnected) return;
+      const cleanNumber = config.ownerWaNumber.replace(/\D/g, '');
+      let code;
+      let lastErr;
+      for (let attempt = 1; attempt <= 5; attempt++) {
+        try {
+          if (attempt > 1) await delay(3000 * attempt);
+          code = await sock.requestPairingCode(cleanNumber, 'PAPPYBOT');
+          if (code && typeof code === 'string') break;
+        } catch (e) {
+          lastErr = e;
+          const sc = e?.output?.statusCode;
+          logger.warn(`Owner pairing attempt ${attempt}/5: ${e.message} (${sc})`);
+          if (sc === 401 || sc === 403 || sc === 404) break;
+          if (attempt === 5) break;
+        }
+      }
+      if (code) {
+        pairingRequested = true;
+        pairingCodeSent = true;
+        pairingCodeSentAt = Date.now();
+        logger.info(`Owner pairing code generated: ${code}`);
+        await onCode(code);
+      } else {
+        logger.warn('All owner pairing code attempts failed');
+      }
+    }, 1500);
+  }
 
   sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
-    // When we receive the first QR event, the socket is ready for pairing.
-    if (qr && isPairing && !ownerConnected) {
-      if (onCode) {
-        ownerPairingAttempt++;
-        if (ownerPairingAttempt === 1) {
-          try {
-            const cleanNumber = config.ownerWaNumber.replace(/\D/g, '');
-            logger.info(`Requesting owner pairing code for ${cleanNumber}...`);
-            const code = await sock.requestPairingCode(cleanNumber);
-            logger.info(`Owner pairing code generated: ${code}`);
-            await onCode(code);
-          } catch (e) {
-            logger.warn(`Owner pairing code request failed: ${e.message}`);
-            if (onQR) await onQR(qr);
-          }
-        }
-      } else if (onQR) {
-        await onQR(qr);
-      }
+    if (qr && isPairing && !pairingRequested && !ownerConnected && onQR) {
+      await onQR(qr);
     }
     if (connection === 'open') {
       ownerConnected = true;
@@ -94,10 +121,16 @@ async function connectOwnerWA({ onCode, onQR, onConnected, onDisconnected } = {}
       const code = lastDisconnect?.error?.output?.statusCode;
       logger.info(`Owner WA closed (code=${code})`);
 
-      // Skip close handler during controlled retry or expected 401 during pairing
-      if (isRetrying) return;
-      if (isPairing && !ownerConnected && (code === 401 || code === DisconnectReason.badSession)) {
-        logger.info('Expected 401 during owner pairing, waiting for code request...');
+      if (isPairing && pairingCodeSent) {
+        const timeSinceCode = Date.now() - pairingCodeSentAt;
+        if (timeSinceCode < 3 * 60 * 1000 && (code === DisconnectReason.loggedOut || code === 428)) {
+          logger.info(`Owner socket closed (${code}) during pairing — normal, ignoring`);
+          return;
+        }
+      }
+
+      if (isPairing && !pairingRequested && (code === 401 || code === DisconnectReason.badSession)) {
+        logger.info('Expected 401 during owner pairing, waiting...');
         return;
       }
 
@@ -108,7 +141,7 @@ async function connectOwnerWA({ onCode, onQR, onConnected, onDisconnected } = {}
         logger.info('Owner WA reconnecting in 10s...');
         await sleep(10_000);
         if (intentionalDisconnect) return;
-        connectOwnerWA({ onQR, onConnected, onDisconnected }).catch(e =>
+        connectOwnerWA({ onConnected, onDisconnected }).catch(e =>
           logger.error('Owner WA reconnect failed: ' + e.message)
         );
       }

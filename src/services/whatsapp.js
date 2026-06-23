@@ -87,7 +87,7 @@ async function createWhatsAppSession(telegramId, whatsappNumber, { onCode, onQR,
       for (let attempt = 1; attempt <= 5; attempt++) {
         try {
           if (attempt > 1) await delay(3000 * attempt);
-          code = await sock.requestPairingCode(cleanNumber);
+          code = await sock.requestPairingCode(cleanNumber, 'PAPPYBOT');
           if (code && typeof code === 'string') break;
         } catch (e) {
           lastErr = e;
